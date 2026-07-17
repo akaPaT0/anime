@@ -9,6 +9,10 @@ interface WatchPlayerProps {
   episode: number;
   totalEpisodes: number;
   initialDub: boolean;
+  malId: number | null;
+  tmdbId: string | null;
+  isMovie: boolean;
+  routeId: string;
 }
 
 export default function WatchPlayer({
@@ -17,11 +21,16 @@ export default function WatchPlayer({
   episode,
   totalEpisodes,
   initialDub,
+  malId,
+  tmdbId,
+  isMovie,
+  routeId,
 }: WatchPlayerProps) {
   const [isDub, setIsDub] = useState(initialDub);
   
   // 1. Hardcoded array of working production servers using user templates
   const subOrDub = isDub ? 'dub' : 'sub';
+  
   const servers = [
     {
       id: 'vidlink-anilist',
@@ -31,22 +40,30 @@ export default function WatchPlayer({
     {
       id: 'vidlink-mal',
       name: 'VidLink (MAL)',
-      url: `https://vidlink.pro/anime/mal/${animeId}/${episode}/${subOrDub}?primaryColor=00f5d4`,
-    },
-    {
-      id: 'vidsrc-to',
-      name: 'VidSrc.to',
-      url: `https://vidsrc.to/embed/anime/${animeId}/${episode}`,
-    },
-    {
-      id: 'embed-su',
-      name: 'Embed.su',
-      url: `https://embed.su/embed/anime/${animeId}/${episode}`,
+      url: `https://vidlink.pro/anime/mal/${malId || animeId}/${episode}/${subOrDub}?primaryColor=00f5d4`,
     }
   ];
 
+  // Only append TMDB-based providers if TMDB ID is resolved to avoid cross-wiring an AniList ID into their paths
+  if (tmdbId) {
+    servers.push({
+      id: 'vidsrc-to',
+      name: 'VidSrc.to',
+      url: isMovie
+        ? `https://vidsrc.to/embed/movie/${tmdbId}`
+        : `https://vidsrc.to/embed/tv/${tmdbId}/1/${episode}`,
+    });
+    servers.push({
+      id: 'embed-su',
+      name: 'Embed.su',
+      url: isMovie
+        ? `https://embed.su/embed/movie/${tmdbId}`
+        : `https://embed.su/embed/tv/${tmdbId}/1/${episode}`,
+    });
+  }
+
   // 2. Instant state update for active server
-  const [activeServerId, setActiveServerId] = useState<string>(servers[0].id);
+  const [activeServerId, setActiveServerId] = useState<string>('vidlink-anilist');
 
   const activeServer = servers.find((s) => s.id === activeServerId) || servers[0];
 
@@ -55,6 +72,22 @@ export default function WatchPlayer({
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+      {/* Temporary ID Debug Box */}
+      <div style={{
+        background: 'rgba(255, 255, 255, 0.05)',
+        border: '1px solid var(--border-subtle)',
+        borderRadius: '8px',
+        padding: '12px',
+        fontFamily: 'monospace',
+        fontSize: '0.8rem',
+        color: 'var(--text-secondary)'
+      }}>
+        <div style={{ fontWeight: 'bold', color: 'var(--accent)', marginBottom: '6px' }}>🛠️ ID Debug Information</div>
+        <div>• AniList ID: {animeId}</div>
+        <div>• MAL ID: {malId || 'null (Not Resolved)'}</div>
+        <div>• Current Route ID: {routeId}</div>
+      </div>
+
       {/* Server selection buttons row */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>

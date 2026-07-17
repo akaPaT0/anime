@@ -1,7 +1,8 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { getAnimeById, formatFormat } from '@/lib/anilist';
+import { getAnimeById, formatFormat, extractExternalIds } from '@/lib/anilist';
+import { getMappedIds } from '@/lib/mappings';
 import EpisodeList from '@/components/EpisodeList';
 import WatchPlayer from '@/components/WatchPlayer';
 
@@ -42,6 +43,14 @@ export default async function WatchPage({ params, searchParams }: WatchPageProps
 
   const title = anime.title.english || anime.title.romaji;
   const totalEpisodes = anime.episodes ?? 1;
+
+  // Query local mappings first
+  const localMap = getMappedIds(animeId);
+  const { imdbId: apiImdb, tmdbId: apiTmdb } = extractExternalIds(anime.externalLinks);
+
+  const malId = localMap.malId || anime.idMal;
+  const tmdbId = localMap.tmdbId || apiTmdb;
+  const isMovie = anime.format === 'MOVIE';
 
   return (
     <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '1.5rem' }}>
@@ -92,6 +101,10 @@ export default async function WatchPage({ params, searchParams }: WatchPageProps
             episode={epNum}
             totalEpisodes={totalEpisodes}
             initialDub={isDub}
+            malId={malId}
+            tmdbId={tmdbId}
+            isMovie={isMovie}
+            routeId={id}
           />
         </div>
 

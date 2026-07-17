@@ -151,7 +151,7 @@ export default function WatchPlayer({
         style={{
           position: 'relative',
           width: '100%',
-          paddingTop: '56.25%',
+          aspectRatio: '16/9',
           background: '#000',
           borderRadius: '8px',
           overflow: 'hidden',
@@ -160,20 +160,20 @@ export default function WatchPlayer({
         }}
       >
         {loading ? (
-          <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10 }}>
             <div className="spinner text-teal-400" style={{ borderTopColor: '#00f5d4' }} />
           </div>
         ) : error ? (
-          <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10 }}>
             <span className="text-orange-500" style={{ fontWeight: 600 }}>{error}</span>
           </div>
         ) : activeServer ? (
           <iframe
             key={activeServer.id}
             src={activeServer.url}
-            allowFullScreen
-            allow="autoplay; encrypted-media; picture-in-picture"
-            style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', border: 'none' }}
+            allow="autoplay; fullscreen"
+            sandbox="allow-scripts allow-same-origin allow-presentation"
+            style={{ position: 'relative', zIndex: 20, pointerEvents: 'auto', width: '100%', height: '100%', border: 'none' }}
           />
         ) : null}
       </div>

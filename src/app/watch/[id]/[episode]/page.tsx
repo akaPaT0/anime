@@ -1,8 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { getAnimeById, formatFormat, extractExternalIds } from '@/lib/anilist';
-import { getMappedIds } from '@/lib/mappings';
+import { getAnimeById, formatFormat } from '@/lib/anilist';
 import EpisodeList from '@/components/EpisodeList';
 import WatchPlayer from '@/components/WatchPlayer';
 
@@ -33,7 +32,6 @@ export default async function WatchPage({ params, searchParams }: WatchPageProps
   const animeId = Number(id);
   const epNum = Math.max(1, Number(episode) || 1);
   const isDub = dub === 'true';
-  const subOrDub = isDub ? 'dub' : 'sub';
 
   let anime;
   try {
@@ -44,18 +42,6 @@ export default async function WatchPage({ params, searchParams }: WatchPageProps
 
   const title = anime.title.english || anime.title.romaji;
   const totalEpisodes = anime.episodes ?? 1;
-
-  // Query local mapping first (highly reliable, covers 19,000+ entries)
-  const localMap = getMappedIds(animeId);
-  
-  // Fallbacks: If local mapping doesn't resolve IDs, check AniList raw attributes
-  const { imdbId: apiImdb, tmdbId: apiTmdb } = extractExternalIds(anime.externalLinks);
-  
-  const malId = localMap.malId || anime.idMal;
-  const tmdbId = localMap.tmdbId || apiTmdb;
-  const imdbId = localMap.imdbId || apiImdb;
-  
-  console.log(`[WatchPage] Resolving IDs for anime ${animeId}: malId=${malId}, tmdbId=${tmdbId}, imdbId=${imdbId}`);
 
   return (
     <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '1.5rem' }}>
@@ -103,12 +89,8 @@ export default async function WatchPage({ params, searchParams }: WatchPageProps
           <WatchPlayer
             animeId={animeId}
             title={title}
-            malId={malId}
-            tmdbId={tmdbId}
-            imdbId={imdbId}
             episode={epNum}
             totalEpisodes={totalEpisodes}
-            format={anime.format}
             initialDub={isDub}
           />
         </div>
@@ -141,7 +123,7 @@ export default async function WatchPage({ params, searchParams }: WatchPageProps
               animeId={animeId}
               totalEpisodes={totalEpisodes}
               currentEp={epNum}
-              subOrDub={subOrDub}
+              subOrDub={isDub ? 'dub' : 'sub'}
             />
           </div>
         </div>

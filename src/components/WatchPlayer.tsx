@@ -6,30 +6,21 @@ import Link from 'next/link';
 interface WatchPlayerProps {
   animeId: number;
   title: string;
-  malId: number | null;
-  tmdbId: string | null;
-  imdbId: string | null;
   episode: number;
   totalEpisodes: number;
-  format: string | null;
   initialDub: boolean;
 }
 
 export default function WatchPlayer({
   animeId,
   title,
-  malId,
-  tmdbId,
-  imdbId,
   episode,
   totalEpisodes,
-  format,
   initialDub,
 }: WatchPlayerProps) {
   const [isDub, setIsDub] = useState(initialDub);
   
   // 1. Hardcoded array of working production servers using user templates
-  // Using malId for the MAL route if available, otherwise falling back to animeId just in case
   const servers = [
     {
       id: 'vidlink-anilist',
@@ -39,7 +30,7 @@ export default function WatchPlayer({
     {
       id: 'vidlink-mal',
       name: 'VidLink (MAL)',
-      url: `https://vidlink.pro/anime/mal/${malId || animeId}/${episode}?primaryColor=00f5d4`,
+      url: `https://vidlink.pro/anime/mal/${animeId}/${episode}?primaryColor=00f5d4`,
     },
     {
       id: 'vidsrc-to',

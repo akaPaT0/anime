@@ -38,6 +38,14 @@ function loadMappings() {
   }
 }
 
+function getFirstId(val: any): string | null {
+  if (val === undefined || val === null) return null;
+  if (Array.isArray(val)) {
+    return val.length > 0 ? String(val[0]) : null;
+  }
+  return String(val);
+}
+
 export function getMappedIds(anilistId: number): {
   malId: number | null;
   tmdbId: string | null;
@@ -51,11 +59,11 @@ export function getMappedIds(anilistId: number): {
   }
 
   const malId = item.mal_id ?? null;
-  const imdbId = item.imdb_id?.[0] ?? null;
+  const imdbId = getFirstId(item.imdb_id);
   
-  const tmdbMovie = item.themoviedb_id?.movie?.[0];
-  const tmdbTv = item.themoviedb_id?.tv?.[0];
-  const tmdbId = tmdbMovie ? String(tmdbMovie) : tmdbTv ? String(tmdbTv) : null;
+  const tmdbMovie = item.themoviedb_id?.movie;
+  const tmdbTv = item.themoviedb_id?.tv;
+  const tmdbId = getFirstId(tmdbMovie) || getFirstId(tmdbTv);
 
   return { malId, tmdbId, imdbId };
 }

@@ -171,8 +171,8 @@ export default function WatchPlayer({
           <iframe
             key={activeServer.id}
             src={activeServer.url}
+            allowFullScreen
             allow="autoplay; fullscreen"
-            sandbox="allow-scripts allow-same-origin allow-presentation"
             style={{ position: 'relative', zIndex: 20, pointerEvents: 'auto', width: '100%', height: '100%', border: 'none' }}
           />
         ) : null}

@@ -39,13 +39,14 @@ export default function WatchPlayer({
   // Construct active server sources dynamically based on available IDs
   const servers = useMemo<ServerOption[]>(() => {
     const list: ServerOption[] = [];
+    const base = process.env.NEXT_PUBLIC_API_BASE_URL || '';
 
     // Server 1: VidLink MAL-based (natively resolves Vidstream/GogoPlay, MyCloud, Filemoon sources)
     if (malId) {
       list.push({
         id: 'vidlink-mal',
         name: 'VidLink (MAL)',
-        url: `https://vidlink.pro/anime/${malId}/${episode}/${subOrDub}?primaryColor=00f5d4&icons=vid`,
+        url: `${base}/anime/${malId}/${episode}/${subOrDub}?primaryColor=00f5d4&icons=vid`,
       });
     }
 
@@ -55,8 +56,8 @@ export default function WatchPlayer({
         id: 'vidlink-tmdb',
         name: 'VidLink (TMDb)',
         url: isMovie
-          ? `https://vidlink.pro/movie/${tmdbId}?primaryColor=00f5d4&icons=vid`
-          : `https://vidlink.pro/tv/${tmdbId}/1/${episode}?primaryColor=00f5d4&icons=vid`,
+          ? `${base}/movie/${tmdbId}?primaryColor=00f5d4&icons=vid`
+          : `${base}/tv/${tmdbId}/1/${episode}?primaryColor=00f5d4&icons=vid`,
       });
     }
 

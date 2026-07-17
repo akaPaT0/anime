@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useEffect, useRef } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
 
 interface WatchPlayerProps {
@@ -15,12 +15,6 @@ interface WatchPlayerProps {
   initialDub: boolean;
 }
 
-interface ServerOption {
-  id: string;
-  name: string;
-  url: string;
-}
-
 export default function WatchPlayer({
   animeId,
   title,
@@ -33,101 +27,36 @@ export default function WatchPlayer({
   initialDub,
 }: WatchPlayerProps) {
   const [isDub, setIsDub] = useState(initialDub);
-  const subOrDub = isDub ? 'dub' : 'sub';
-  const isMovie = format === 'MOVIE';
-
-  // Memoized Verified Server Options
-  const servers = useMemo<ServerOption[]>(() => {
-    const list: ServerOption[] = [];
-
-    if (tmdbId) {
-      list.push({
-        id: 'vidsrc-to',
-        name: 'VidSrc.to',
-        url: isMovie
-          ? `https://vidsrc.to/embed/movie/${tmdbId}`
-          : `https://vidsrc.to/embed/tv/${tmdbId}/1/${episode}`,
-      });
-      list.push({
-        id: 'embed-su',
-        name: 'Embed.su',
-        url: isMovie
-          ? `https://embed.su/embed/movie/${tmdbId}`
-          : `https://embed.su/embed/tv/${tmdbId}/1/${episode}`,
-      });
-    }
-
-    return list;
-  }, [tmdbId, episode, isMovie]);
-
-  const [activeServerId, setActiveServerId] = useState<string>('');
-  const [serverStatus, setServerStatus] = useState<Record<string, 'checking' | 'online' | 'offline'>>({});
   
-  // Sync active server and trigger fallback ping
-  useEffect(() => {
-    if (servers.length === 0) {
-      if (activeServerId !== '') setActiveServerId('');
-      return;
+  // 1. Hardcoded array of working production servers using user templates
+  // Using malId for the MAL route if available, otherwise falling back to animeId just in case
+  const servers = [
+    {
+      id: 'vidlink-anilist',
+      name: 'VidLink (AniList)',
+      url: `https://vidlink.pro/anime/anilist/${animeId}/${episode}?primaryColor=00f5d4`,
+    },
+    {
+      id: 'vidlink-mal',
+      name: 'VidLink (MAL)',
+      url: `https://vidlink.pro/anime/mal/${malId || animeId}/${episode}?primaryColor=00f5d4`,
+    },
+    {
+      id: 'vidsrc-to',
+      name: 'VidSrc.to',
+      url: `https://vidsrc.to/embed/anime/${animeId}/${episode}`,
+    },
+    {
+      id: 'embed-su',
+      name: 'Embed.su',
+      url: `https://embed.su/embed/anime/${animeId}/${episode}`,
     }
+  ];
 
-    // Initialize or reset if current server is invalid
-    if (!activeServerId || !servers.find(s => s.id === activeServerId)) {
-      const available = servers.find(s => serverStatus[s.id] !== 'offline');
-      if (available) {
-        setActiveServerId(available.id);
-      } else {
-        setActiveServerId(servers[0].id); // fallback
-      }
-      return;
-    }
+  // 2. Instant state update for active server
+  const [activeServerId, setActiveServerId] = useState<string>(servers[0].id);
 
-    const currentServer = servers.find(s => s.id === activeServerId);
-    if (!currentServer || serverStatus[currentServer.id] === 'online' || serverStatus[currentServer.id] === 'checking') {
-      return;
-    }
-
-    const checkServer = async () => {
-      setServerStatus(prev => ({ ...prev, [currentServer.id]: 'checking' }));
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 2000);
-
-      try {
-        const res = await fetch(currentServer.url, { 
-          signal: controller.signal,
-          mode: 'no-cors' // Prevents CORS blocks from throwing false-positive errors on cross-origin iframe URLs
-        });
-        clearTimeout(timeoutId);
-        
-        // Mode 'no-cors' returns an opaque response, so we just treat success if it didn't throw a network error/timeout
-        setServerStatus(prev => ({ ...prev, [currentServer.id]: 'online' }));
-      } catch (err) {
-        clearTimeout(timeoutId);
-        console.warn(`[WatchPlayer] Server ping failed for ${currentServer.name}:`, err);
-        setServerStatus(prev => ({ ...prev, [currentServer.id]: 'offline' }));
-        
-        // Auto-advance to next available server
-        const currentIndex = servers.findIndex(s => s.id === currentServer.id);
-        const nextServer = servers.slice(currentIndex + 1).find(s => serverStatus[s.id] !== 'offline');
-        
-        if (nextServer) {
-          setActiveServerId(nextServer.id);
-        }
-      }
-    };
-
-    checkServer();
-  }, [servers, activeServerId, serverStatus]);
-
-  // Sync isDub state safely
-  useEffect(() => {
-    if (isDub !== initialDub) {
-      setIsDub(initialDub);
-    }
-  }, [initialDub, isDub]);
-
-  const activeServer = useMemo(() => {
-    return servers.find((s) => s.id === activeServerId) || servers[0] || null;
-  }, [servers, activeServerId]);
+  const activeServer = servers.find((s) => s.id === activeServerId) || servers[0];
 
   const prevEp = episode > 1 ? episode - 1 : null;
   const nextEp = episode < totalEpisodes ? episode + 1 : null;
@@ -140,55 +69,36 @@ export default function WatchPlayer({
           <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', marginRight: '4px' }}>
             SERVERS:
           </span>
-          {servers.map((srv) => {
-            const isOffline = serverStatus[srv.id] === 'offline';
-            const isChecking = serverStatus[srv.id] === 'checking';
-            return (
-              <button
-                key={srv.id}
-                onClick={() => {
-                  if (activeServerId !== srv.id && !isOffline) {
-                    setActiveServerId(srv.id);
-                    // Reset status to force a re-check if they manually click it
-                    setServerStatus(prev => ({ ...prev, [srv.id]: undefined } as any));
-                  }
-                }}
-                disabled={isOffline}
-                style={{
-                  padding: '6px 12px',
-                  fontSize: '0.75rem',
-                  fontWeight: 600,
-                  borderRadius: '6px',
-                  cursor: isOffline ? 'not-allowed' : 'pointer',
-                  border: '1px solid var(--border-subtle)',
-                  transition: 'all 0.15s ease',
-                  backgroundColor: activeServerId === srv.id ? 'var(--accent-glow)' : 'rgba(255,255,255,0.03)',
-                  color: isOffline ? 'var(--text-muted)' : (activeServerId === srv.id ? 'var(--accent)' : 'var(--text-secondary)'),
-                  borderColor: activeServerId === srv.id ? 'rgba(0, 245, 212, 0.3)' : 'var(--border-subtle)',
-                  opacity: isOffline ? 0.5 : 1,
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '4px'
-                }}
-              >
-                {srv.name}
-                {isChecking && <span style={{ fontSize: '10px' }}>⏳</span>}
-                {isOffline && <span style={{ fontSize: '10px' }}>❌</span>}
-              </button>
-            );
-          })}
-          {servers.length === 0 && (
-            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>No backup streaming servers found</span>
-          )}
+          {servers.map((srv) => (
+            <button
+              key={srv.id}
+              onClick={() => setActiveServerId(srv.id)}
+              style={{
+                padding: '6px 12px',
+                fontSize: '0.75rem',
+                fontWeight: 600,
+                borderRadius: '6px',
+                cursor: 'pointer',
+                border: '1px solid var(--border-subtle)',
+                transition: 'all 0.15s ease',
+                backgroundColor: activeServerId === srv.id ? 'var(--accent-glow)' : 'rgba(255,255,255,0.03)',
+                color: activeServerId === srv.id ? 'var(--accent)' : 'var(--text-secondary)',
+                borderColor: activeServerId === srv.id ? 'rgba(0, 245, 212, 0.3)' : 'var(--border-subtle)',
+              }}
+            >
+              {srv.name}
+            </button>
+          ))}
         </div>
       </div>
 
       {/* Debug Info */}
       <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '8px', padding: '8px', background: 'rgba(0,0,0,0.2)', borderRadius: '4px', wordBreak: 'break-all', fontFamily: 'monospace' }}>
-        <strong>[Debug Iframe Src]:</strong> {activeServer?.url || 'No URL available'}
+        <strong>[Debug Iframe Src]:</strong> {activeServer.url}
       </div>
 
       {/* Video Iframe Player Wrapper */}
+      {/* 3. Ensuring no pointer-events-none or invisible overlays */}
       <div
         className="watch-player-wrap"
         style={{
@@ -202,26 +112,13 @@ export default function WatchPlayer({
           boxShadow: 'var(--shadow-card)',
         }}
       >
-        {activeServer ? (
-          <iframe
-            key={activeServer.id}
-            src={activeServer.url}
-            allowFullScreen
-            allow="autoplay; encrypted-media; picture-in-picture"
-            style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', border: 'none' }}
-          />
-        ) : (
-          <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '10px', padding: '20px', textAlign: 'center' }}>
-            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="1.5" style={{ opacity: 0.6 }}>
-              <circle cx="12" cy="12" r="10" />
-              <path d="M12 8v4M12 16h.01" />
-            </svg>
-            <p style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>Streaming Unavailable</p>
-            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', maxWidth: '340px' }}>
-              We could not map this title to any of our third-party movie or anime resolver servers.
-            </p>
-          </div>
-        )}
+        <iframe
+          key={activeServer.id}
+          src={activeServer.url}
+          allowFullScreen
+          allow="autoplay; encrypted-media; picture-in-picture"
+          style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', border: 'none' }}
+        />
       </div>
 
       {/* Title block + Sub/Dub toggle */}
@@ -249,17 +146,13 @@ export default function WatchPlayer({
           {/* Sub/Dub Quick Toggle */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             <button
-              onClick={() => {
-                if (isDub) setIsDub(false);
-              }}
+              onClick={() => setIsDub(false)}
               className={`dub-toggle-btn ${!isDub ? 'active-lang' : ''}`}
             >
               SUB
             </button>
             <button
-              onClick={() => {
-                if (!isDub) setIsDub(true);
-              }}
+              onClick={() => setIsDub(true)}
               className={`dub-toggle-btn ${isDub ? 'active-lang' : ''}`}
             >
               DUB
@@ -288,22 +181,6 @@ export default function WatchPlayer({
               Next Episode →
             </span>
           )}
-        </div>
-
-        {/* External fallback block */}
-        <div style={{ marginTop: '10px', padding: '10px', borderRadius: '8px', background: 'rgba(255,255,255,0.02)', border: '1px dashed var(--border-subtle)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
-          <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
-            ⚠️ Issues with the player? Try external mirror search:
-          </span>
-          <a
-            href={`https://gogoanime3.co/search.html?keyword=${encodeURIComponent(title)}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="btn-ghost"
-            style={{ fontSize: '0.75rem', padding: '6px 12px', color: 'var(--accent)', textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}
-          >
-            Search Gogoanime ↗
-          </a>
         </div>
       </div>
     </div>

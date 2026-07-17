@@ -36,40 +36,10 @@ export default function WatchPlayer({
   const subOrDub = isDub ? 'dub' : 'sub';
   const isMovie = format === 'MOVIE';
 
-  // Render tracer counter
-  const renderCount = useRef(0);
-  renderCount.current += 1;
-  
-  // Memoized Base URL
-  const base = useMemo(() => {
-    return process.env.NEXT_PUBLIC_API_BASE_URL || 'https://vidlink.pro';
-  }, []);
-
-  // Memoized Server Options List - Stable Reference
+  // Memoized Verified Server Options
   const servers = useMemo<ServerOption[]>(() => {
     const list: ServerOption[] = [];
 
-    // Server 1: VidLink MAL-based (natively resolves Vidstream/GogoPlay, MyCloud, Filemoon sources)
-    if (malId) {
-      list.push({
-        id: 'vidlink-mal',
-        name: 'VidLink (MAL)',
-        url: `${base}/anime/${malId}/${episode}/${subOrDub}?primaryColor=00f5d4&icons=vid`,
-      });
-    }
-
-    // Server 2: VidLink TMDb-based
-    if (tmdbId) {
-      list.push({
-        id: 'vidlink-tmdb',
-        name: 'VidLink (TMDb)',
-        url: isMovie
-          ? `${base}/movie/${tmdbId}?primaryColor=00f5d4&icons=vid`
-          : `${base}/tv/${tmdbId}/1/${episode}?primaryColor=00f5d4&icons=vid`,
-      });
-    }
-
-    // Server 3: VidSrc.to (high-speed TMDb mirror)
     if (tmdbId) {
       list.push({
         id: 'vidsrc-to',
@@ -78,21 +48,6 @@ export default function WatchPlayer({
           ? `https://vidsrc.to/embed/movie/${tmdbId}`
           : `https://vidsrc.to/embed/tv/${tmdbId}/1/${episode}`,
       });
-    }
-
-    // Server 4: VidSrc.xyz (TMDb-focused streaming engine)
-    if (tmdbId) {
-      list.push({
-        id: 'vidsrc-xyz',
-        name: 'VidSrc.xyz',
-        url: isMovie
-          ? `https://vidsrc.xyz/embed/movie/${tmdbId}`
-          : `https://vidsrc.xyz/embed/tv/${tmdbId}/1/${episode}`,
-      });
-    }
-
-    // Server 5: Embed.su (highly stable multi-source mirror)
-    if (tmdbId) {
       list.push({
         id: 'embed-su',
         name: 'Embed.su',
@@ -103,38 +58,67 @@ export default function WatchPlayer({
     }
 
     return list;
-  }, [malId, tmdbId, episode, subOrDub, isMovie, base]);
+  }, [tmdbId, episode, isMovie]);
 
-  // Server selection state
   const [activeServerId, setActiveServerId] = useState<string>('');
-
-  // Fetch / State update tracker
-  const fetchEffectCount = useRef(0);
-
-  // Sync active server on initial load or change of options list (Strict Checks)
+  const [serverStatus, setServerStatus] = useState<Record<string, 'checking' | 'online' | 'offline'>>({});
+  
+  // Sync active server and trigger fallback ping
   useEffect(() => {
-    fetchEffectCount.current += 1;
-    console.log(
-      `[WatchPlayer] fetchEffect triggered | count: ${fetchEffectCount.current} | animeId: ${animeId} | episode: ${episode} | activeServerId: "${activeServerId}"`
-    );
-
     if (servers.length === 0) {
-      if (activeServerId !== '') {
-        setActiveServerId('');
+      if (activeServerId !== '') setActiveServerId('');
+      return;
+    }
+
+    // Initialize or reset if current server is invalid
+    if (!activeServerId || !servers.find(s => s.id === activeServerId)) {
+      const available = servers.find(s => serverStatus[s.id] !== 'offline');
+      if (available) {
+        setActiveServerId(available.id);
+      } else {
+        setActiveServerId(servers[0].id); // fallback
       }
       return;
     }
 
-    const exists = servers.some((s) => s.id === activeServerId);
-    if (!exists) {
-      const fallbackId = servers[0].id;
-      if (activeServerId !== fallbackId) {
-        setActiveServerId(fallbackId);
-      }
+    const currentServer = servers.find(s => s.id === activeServerId);
+    if (!currentServer || serverStatus[currentServer.id] === 'online' || serverStatus[currentServer.id] === 'checking') {
+      return;
     }
-  }, [servers, activeServerId, animeId, episode]);
 
-  // Sync isDub state with initialDub changes safely
+    const checkServer = async () => {
+      setServerStatus(prev => ({ ...prev, [currentServer.id]: 'checking' }));
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 2000);
+
+      try {
+        const res = await fetch(currentServer.url, { 
+          signal: controller.signal,
+          mode: 'no-cors' // Prevents CORS blocks from throwing false-positive errors on cross-origin iframe URLs
+        });
+        clearTimeout(timeoutId);
+        
+        // Mode 'no-cors' returns an opaque response, so we just treat success if it didn't throw a network error/timeout
+        setServerStatus(prev => ({ ...prev, [currentServer.id]: 'online' }));
+      } catch (err) {
+        clearTimeout(timeoutId);
+        console.warn(`[WatchPlayer] Server ping failed for ${currentServer.name}:`, err);
+        setServerStatus(prev => ({ ...prev, [currentServer.id]: 'offline' }));
+        
+        // Auto-advance to next available server
+        const currentIndex = servers.findIndex(s => s.id === currentServer.id);
+        const nextServer = servers.slice(currentIndex + 1).find(s => serverStatus[s.id] !== 'offline');
+        
+        if (nextServer) {
+          setActiveServerId(nextServer.id);
+        }
+      }
+    };
+
+    checkServer();
+  }, [servers, activeServerId, serverStatus]);
+
+  // Sync isDub state safely
   useEffect(() => {
     if (isDub !== initialDub) {
       setIsDub(initialDub);
@@ -145,11 +129,6 @@ export default function WatchPlayer({
     return servers.find((s) => s.id === activeServerId) || servers[0] || null;
   }, [servers, activeServerId]);
 
-  console.log(
-    `[WatchPlayer] render | count: ${renderCount.current} | activeServer: ${activeServer?.id || 'none'}`
-  );
-
-  // Prev & Next navigation configuration
   const prevEp = episode > 1 ? episode - 1 : null;
   const nextEp = episode < totalEpisodes ? episode + 1 : null;
 
@@ -161,41 +140,47 @@ export default function WatchPlayer({
           <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', marginRight: '4px' }}>
             SERVERS:
           </span>
-          {servers.map((srv) => (
-            <button
-              key={srv.id}
-              onClick={() => {
-                if (activeServerId !== srv.id) {
-                  setActiveServerId(srv.id);
-                }
-              }}
-              style={{
-                padding: '6px 12px',
-                fontSize: '0.75rem',
-                fontWeight: 600,
-                borderRadius: '6px',
-                cursor: 'pointer',
-                border: '1px solid var(--border-subtle)',
-                transition: 'all 0.15s ease',
-                backgroundColor: activeServerId === srv.id ? 'var(--accent-glow)' : 'rgba(255,255,255,0.03)',
-                color: activeServerId === srv.id ? 'var(--accent)' : 'var(--text-secondary)',
-                borderColor: activeServerId === srv.id ? 'rgba(0, 245, 212, 0.3)' : 'var(--border-subtle)',
-              }}
-            >
-              {srv.name}
-            </button>
-          ))}
+          {servers.map((srv) => {
+            const isOffline = serverStatus[srv.id] === 'offline';
+            const isChecking = serverStatus[srv.id] === 'checking';
+            return (
+              <button
+                key={srv.id}
+                onClick={() => {
+                  if (activeServerId !== srv.id && !isOffline) {
+                    setActiveServerId(srv.id);
+                    // Reset status to force a re-check if they manually click it
+                    setServerStatus(prev => ({ ...prev, [srv.id]: undefined } as any));
+                  }
+                }}
+                disabled={isOffline}
+                style={{
+                  padding: '6px 12px',
+                  fontSize: '0.75rem',
+                  fontWeight: 600,
+                  borderRadius: '6px',
+                  cursor: isOffline ? 'not-allowed' : 'pointer',
+                  border: '1px solid var(--border-subtle)',
+                  transition: 'all 0.15s ease',
+                  backgroundColor: activeServerId === srv.id ? 'var(--accent-glow)' : 'rgba(255,255,255,0.03)',
+                  color: isOffline ? 'var(--text-muted)' : (activeServerId === srv.id ? 'var(--accent)' : 'var(--text-secondary)'),
+                  borderColor: activeServerId === srv.id ? 'rgba(0, 245, 212, 0.3)' : 'var(--border-subtle)',
+                  opacity: isOffline ? 0.5 : 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px'
+                }}
+              >
+                {srv.name}
+                {isChecking && <span style={{ fontSize: '10px' }}>⏳</span>}
+                {isOffline && <span style={{ fontSize: '10px' }}>❌</span>}
+              </button>
+            );
+          })}
           {servers.length === 0 && (
             <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>No backup streaming servers found</span>
           )}
         </div>
-        
-        {activeServerId.startsWith('vidlink') && (
-          <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '4px', margin: '2px 0 0' }}>
-            <span style={{ color: 'var(--accent)' }}>💡 Tip:</span> 
-            If player displays an error, click the <b>&quot;Server&quot; settings icon</b> inside the video player to switch between <b>Vidstream</b>, <b>MyCloud</b>, and <b>Filemoon</b> mirrors.
-          </p>
-        )}
       </div>
 
       {/* Debug Info */}
@@ -219,6 +204,7 @@ export default function WatchPlayer({
       >
         {activeServer ? (
           <iframe
+            key={activeServer.id}
             src={activeServer.url}
             allowFullScreen
             allow="autoplay; encrypted-media; picture-in-picture"

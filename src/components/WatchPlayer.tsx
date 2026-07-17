@@ -39,7 +39,9 @@ export default function WatchPlayer({
   // Construct active server sources dynamically based on available IDs
   const servers = useMemo<ServerOption[]>(() => {
     const list: ServerOption[] = [];
-    const base = process.env.NEXT_PUBLIC_API_BASE_URL || '';
+    
+    // Default to the secure production endpoint if no environment override is provided
+    const base = process.env.NEXT_PUBLIC_API_BASE_URL || 'https://vidlink.pro';
 
     // Server 1: VidLink MAL-based (natively resolves Vidstream/GogoPlay, MyCloud, Filemoon sources)
     if (malId) {

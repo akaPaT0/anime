@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import Link from 'next/link';
 
 interface WatchPlayerProps {
@@ -36,12 +36,18 @@ export default function WatchPlayer({
   const subOrDub = isDub ? 'dub' : 'sub';
   const isMovie = format === 'MOVIE';
 
-  // Construct active server sources dynamically based on available IDs
+  // Render tracer counter
+  const renderCount = useRef(0);
+  renderCount.current += 1;
+  
+  // Memoized Base URL
+  const base = useMemo(() => {
+    return process.env.NEXT_PUBLIC_API_BASE_URL || 'https://vidlink.pro';
+  }, []);
+
+  // Memoized Server Options List - Stable Reference
   const servers = useMemo<ServerOption[]>(() => {
     const list: ServerOption[] = [];
-    
-    // Default to the secure production endpoint if no environment override is provided
-    const base = process.env.NEXT_PUBLIC_API_BASE_URL || 'https://vidlink.pro';
 
     // Server 1: VidLink MAL-based (natively resolves Vidstream/GogoPlay, MyCloud, Filemoon sources)
     if (malId) {
@@ -97,15 +103,51 @@ export default function WatchPlayer({
     }
 
     return list;
-  }, [malId, tmdbId, episode, subOrDub, isMovie]);
+  }, [malId, tmdbId, episode, subOrDub, isMovie, base]);
 
-  const [activeServerId, setActiveServerId] = useState<string>(
-    servers.length > 0 ? servers[0].id : ''
-  );
+  // Server selection state
+  const [activeServerId, setActiveServerId] = useState<string>('');
+
+  // Fetch / State update tracker
+  const fetchEffectCount = useRef(0);
+
+  // Sync active server on initial load or change of options list (Strict Checks)
+  useEffect(() => {
+    fetchEffectCount.current += 1;
+    console.log(
+      `[WatchPlayer] fetchEffect triggered | count: ${fetchEffectCount.current} | animeId: ${animeId} | episode: ${episode} | activeServerId: "${activeServerId}"`
+    );
+
+    if (servers.length === 0) {
+      if (activeServerId !== '') {
+        setActiveServerId('');
+      }
+      return;
+    }
+
+    const exists = servers.some((s) => s.id === activeServerId);
+    if (!exists) {
+      const fallbackId = servers[0].id;
+      if (activeServerId !== fallbackId) {
+        setActiveServerId(fallbackId);
+      }
+    }
+  }, [servers, activeServerId, animeId, episode]);
+
+  // Sync isDub state with initialDub changes safely
+  useEffect(() => {
+    if (isDub !== initialDub) {
+      setIsDub(initialDub);
+    }
+  }, [initialDub, isDub]);
 
   const activeServer = useMemo(() => {
-    return servers.find((s) => s.id === activeServerId) || servers[0];
+    return servers.find((s) => s.id === activeServerId) || servers[0] || null;
   }, [servers, activeServerId]);
+
+  console.log(
+    `[WatchPlayer] render | count: ${renderCount.current} | activeServer: ${activeServer?.id || 'none'}`
+  );
 
   // Prev & Next navigation configuration
   const prevEp = episode > 1 ? episode - 1 : null;
@@ -122,7 +164,11 @@ export default function WatchPlayer({
           {servers.map((srv) => (
             <button
               key={srv.id}
-              onClick={() => setActiveServerId(srv.id)}
+              onClick={() => {
+                if (activeServerId !== srv.id) {
+                  setActiveServerId(srv.id);
+                }
+              }}
               style={{
                 padding: '6px 12px',
                 fontSize: '0.75rem',
@@ -212,13 +258,17 @@ export default function WatchPlayer({
           {/* Sub/Dub Quick Toggle */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             <button
-              onClick={() => setIsDub(false)}
+              onClick={() => {
+                if (isDub) setIsDub(false);
+              }}
               className={`dub-toggle-btn ${!isDub ? 'active-lang' : ''}`}
             >
               SUB
             </button>
             <button
-              onClick={() => setIsDub(true)}
+              onClick={() => {
+                if (!isDub) setIsDub(true);
+              }}
               className={`dub-toggle-btn ${isDub ? 'active-lang' : ''}`}
             >
               DUB

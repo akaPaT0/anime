@@ -21,16 +21,17 @@ export default function WatchPlayer({
   const [isDub, setIsDub] = useState(initialDub);
   
   // 1. Hardcoded array of working production servers using user templates
+  const subOrDub = isDub ? 'dub' : 'sub';
   const servers = [
     {
       id: 'vidlink-anilist',
       name: 'VidLink (AniList)',
-      url: `https://vidlink.pro/anime/anilist/${animeId}/${episode}?primaryColor=00f5d4`,
+      url: `https://vidlink.pro/anime/anilist/${animeId}/${episode}/${subOrDub}?primaryColor=00f5d4`,
     },
     {
       id: 'vidlink-mal',
       name: 'VidLink (MAL)',
-      url: `https://vidlink.pro/anime/mal/${animeId}/${episode}?primaryColor=00f5d4`,
+      url: `https://vidlink.pro/anime/mal/${animeId}/${episode}/${subOrDub}?primaryColor=00f5d4`,
     },
     {
       id: 'vidsrc-to',

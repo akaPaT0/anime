@@ -198,6 +198,11 @@ export default function WatchPlayer({
         )}
       </div>
 
+      {/* Debug Info */}
+      <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '8px', padding: '8px', background: 'rgba(0,0,0,0.2)', borderRadius: '4px', wordBreak: 'break-all', fontFamily: 'monospace' }}>
+        <strong>[Debug Iframe Src]:</strong> {activeServer?.url || 'No URL available'}
+      </div>
+
       {/* Video Iframe Player Wrapper */}
       <div
         className="watch-player-wrap"

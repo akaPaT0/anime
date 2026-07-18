@@ -60,7 +60,7 @@ export default function WatchPlayer({
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => {
-      controller.abort();
+      controller.abort(new Error('timeout'));
     }, 10000);
 
     const subOrDubState = isDub ? 'dub' : 'sub';
@@ -86,7 +86,7 @@ export default function WatchPlayer({
         clearTimeout(timeoutId);
         if (!active) return;
         console.error('[WatchPlayer] Extraction failed:', err);
-        if (err.name === 'AbortError') {
+        if (err.message === 'timeout' || err.name === 'AbortError') {
           setError('Extraction timed out. The scraping process took longer than 10 seconds.');
         } else {
           setError('Failed to extract streaming source. The server might be down or rate-limited.');

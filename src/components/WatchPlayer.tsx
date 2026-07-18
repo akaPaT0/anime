@@ -58,9 +58,17 @@ export default function WatchPlayer({
       hlsRef.current = null;
     }
 
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => {
+      controller.abort();
+    }, 10000);
+
     const subOrDubState = isDub ? 'dub' : 'sub';
-    fetch(`/api/stream?anilistId=${animeId}&episodeNumber=${episode}&subOrDub=${subOrDubState}`)
+    fetch(`/api/stream?anilistId=${animeId}&episodeNumber=${episode}&subOrDub=${subOrDubState}`, {
+      signal: controller.signal,
+    })
       .then((res) => {
+        clearTimeout(timeoutId);
         if (!res.ok) throw new Error('Failed to resolve raw streaming links');
         return res.json();
       })
@@ -75,14 +83,21 @@ export default function WatchPlayer({
         }
       })
       .catch((err) => {
+        clearTimeout(timeoutId);
         if (!active) return;
         console.error('[WatchPlayer] Extraction failed:', err);
-        setError('Failed to extract streaming source. The server might be down or rate-limited.');
+        if (err.name === 'AbortError') {
+          setError('Extraction timed out. The scraping process took longer than 10 seconds.');
+        } else {
+          setError('Failed to extract streaming source. The server might be down or rate-limited.');
+        }
         setLoading(false);
       });
 
     return () => {
       active = false;
+      controller.abort();
+      clearTimeout(timeoutId);
     };
   }, [animeId, episode, isDub, retryCount]);
 

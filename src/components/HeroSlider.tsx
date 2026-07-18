@@ -69,6 +69,7 @@ function InfoIcon() {
 export default function HeroSlider({ animes }: HeroSliderProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [fading, setFading] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
 
   const goTo = useCallback(
     (index: number) => {
@@ -87,6 +88,7 @@ export default function HeroSlider({ animes }: HeroSliderProps) {
   }, [currentIndex, animes.length, goTo]);
 
   useEffect(() => {
+    setIsMounted(true);
     if (animes.length <= 1) return;
     const id = setInterval(goNext, 5000);
     return () => clearInterval(id);
@@ -118,7 +120,7 @@ export default function HeroSlider({ animes }: HeroSliderProps) {
     anime.averageScore != null ? (anime.averageScore / 10).toFixed(1) : null;
 
   return (
-    <section className="hero-section" style={{ minHeight: '520px' }}>
+    <section className="hero-section" style={{ minHeight: "520px" }}>
       {/* Blurred background image — fades on transition */}
       <div
         className="hero-bg"

@@ -45,7 +45,7 @@ export default function WatchPlayer({
   const hlsRef = useRef<Hls | null>(null);
   const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // 1. Fetch the raw stream URL directly from AMVSTR (client-side, uses residential IP)
+  // 1. Fetch stream URL from our self-hosted Render API (HiAnime scraper)
   useEffect(() => {
     let active = true;
     setLoading(true);
@@ -63,35 +63,31 @@ export default function WatchPlayer({
       controller.abort(new Error('timeout'));
     }, 15000);
 
-    fetch(`https://api.amvstr.me/api/v2/stream/${animeId}/${episode}`, {
-      signal: controller.signal,
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
-      },
-    })
+    const category = isDub ? 'dub' : 'sub';
+    const apiBase = 'https://anime-api-s4my.onrender.com';
+    const url = `${apiBase}/api/stream?title=${encodeURIComponent(title)}&episode=${episode}&category=${category}`;
+
+    fetch(url, { signal: controller.signal })
       .then((res) => {
         clearTimeout(timeoutId);
-        if (!res.ok) throw new Error(`Upstream API failed with status: ${res.status}`);
+        if (!res.ok) throw new Error(`API returned status ${res.status}`);
         return res.json();
       })
       .then((data) => {
         if (!active) return;
-        const url =
-          data?.stream?.multi?.main?.url ||
-          data?.stream?.multi?.backup?.url;
-        if (url) {
-          setStreamUrl(url);
+        if (data.url) {
+          setStreamUrl(data.url);
           setLoading(false);
         } else {
-          throw new Error('No valid HLS stream found in API payload');
+          throw new Error(data.error || 'No stream URL returned');
         }
       })
       .catch((err) => {
         clearTimeout(timeoutId);
         if (!active) return;
         console.error('[WatchPlayer] Extraction failed:', err);
-        if (err.message === 'timeout' || err.name === 'AbortError') {
-          setError('Extraction timed out after 15 seconds. Please retry.');
+        if (err.name === 'AbortError') {
+          setError('Extraction timed out after 15 seconds. The server may be waking up — please retry.');
         } else {
           setError(`Extraction Failure: ${err.message}`);
         }
@@ -104,6 +100,7 @@ export default function WatchPlayer({
       clearTimeout(timeoutId);
     };
   }, [animeId, episode, isDub, retryCount]);
+
 
 
   // 2. Bind HLS.js to the video tag

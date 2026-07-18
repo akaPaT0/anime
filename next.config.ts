@@ -7,6 +7,7 @@ const nextConfig: NextConfig = {
       { protocol: 'https', hostname: 'img1.ak.crunchyroll.com' },
     ],
   },
+  serverExternalPackages: ['@consumet/extensions', 'got-scraping'],
 };
 
 export default nextConfig;

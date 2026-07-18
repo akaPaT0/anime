@@ -64,8 +64,9 @@ export default function WatchPlayer({
     }, 15000);
 
     const category = isDub ? 'dub' : 'sub';
-    const apiBase = 'https://anime-api-s4my.onrender.com';
+    const apiBase = 'https://anime-api-a4my.onrender.com';
     const url = `${apiBase}/api/stream?title=${encodeURIComponent(title)}&episode=${episode}&category=${category}`;
+
 
     fetch(url, { signal: controller.signal })
       .then((res) => {

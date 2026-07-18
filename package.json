@@ -9,7 +9,7 @@
     "lint": "eslint"
   },
   "dependencies": {
-    "@consumet/extensions": "^1.8.8",
+    "@consumet/extensions": "^1.7.0",
     "@tailwindcss/postcss": "^4.3.3",
     "@vidstack/react": "^0.6.15",
     "got-scraping": "^4.2.1",

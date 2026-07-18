@@ -71,75 +71,29 @@ export async function GET(req: NextRequest) {
 
   const epNum = Number(episodeNumber);
 
-  // Attempt 1: Fetch using AnimePahe provider
+  // Attempt 1: Fetch using Gogoanime provider
   try {
-    console.log(`[StreamExtractor] Attempting AnimePahe for AniList ID ${anilistId}, Ep ${epNum}`);
-    const paheProvider = new ANIME.AnimePahe();
-    // Use .com / .ru / .org as fallbacks for base URL if .si has resolution errors
-    (paheProvider as any).baseUrl = 'https://animepahe.com';
-    const anilist = new META.Anilist(paheProvider);
+    console.log(`[StreamExtractor] Attempting Gogoanime for AniList ID ${anilistId}, Ep ${epNum}`);
+    const gogo = new ANIME.Gogoanime();
+    const anilist = new META.Anilist(gogo);
     
-    const info = await anilist.fetchAnimeInfo(anilistId);
+    const isDub = subOrDub === 'dub';
+    const info = await anilist.fetchAnimeInfo(anilistId, isDub);
     const episode = info.episodes?.find((e: any) => e.number === epNum);
     
     if (episode) {
       const sourcesData = await anilist.fetchEpisodeSources(episode.id);
       if (sourcesData && sourcesData.sources && sourcesData.sources.length > 0) {
-        // Filter sources based on sub/dub preference
-        const isDubPreferred = subOrDub === 'dub';
-        const filteredSources = sourcesData.sources.filter((s: any) => !!s.isDub === isDubPreferred);
-        const activeSources = filteredSources.length > 0 ? filteredSources : sourcesData.sources;
-        
         // Find best source (prioritize 1080p, 720p, then default)
-        const bestSource = activeSources.find((s: any) => s.quality === '1080p') ||
-                            activeSources.find((s: any) => s.quality === '720p') ||
-                            activeSources.find((s: any) => s.quality === 'default') ||
-                            activeSources[0];
-
-        const defaultReferer = sourcesData.headers?.Referer || 'https://kwik.cx/';
-        const streamUrl = bestSource.url;
-        
-        // Construct the proxy URL for HLS playback to bypass CORS/Referer blocks
-        const appUrl = req.nextUrl.origin;
-        const proxyStreamUrl = `${appUrl}/api/stream?url=${encodeURIComponent(streamUrl)}&referer=${encodeURIComponent(defaultReferer)}`;
-
-        return NextResponse.json({
-          url: streamUrl,
-          quality: bestSource.quality,
-          isM3U8: streamUrl.includes('.m3u8') || bestSource.isM3U8,
-          headers: { Referer: defaultReferer },
-          proxyUrl: proxyStreamUrl,
-          sources: activeSources,
-        } as StreamResponse);
-      }
-    }
-  } catch (err: any) {
-    console.warn(`[StreamExtractor] AnimePahe extraction failed: ${err.message}`);
-  }
-
-  // Attempt 2: Fetch using HiAnime (Zoro) provider
-  try {
-    console.log(`[StreamExtractor] Attempting HiAnime for AniList ID ${anilistId}, Ep ${epNum}`);
-    const hianimeProvider = new ANIME.Hianime();
-    const anilist = new META.Anilist(hianimeProvider);
-    
-    const info = await anilist.fetchAnimeInfo(anilistId);
-    const episode = info.episodes?.find((e: any) => e.number === epNum);
-    
-    if (episode) {
-      // HiAnime fetchEpisodeSources signature: (episodeId, server, subOrDub)
-      const subOrDubParam = subOrDub === 'dub' ? 'dub' : 'sub';
-      const sourcesData = await anilist.fetchEpisodeSources(episode.id, 'vidcloud', subOrDubParam);
-      
-      if (sourcesData && sourcesData.sources && sourcesData.sources.length > 0) {
         const bestSource = sourcesData.sources.find((s: any) => s.quality === '1080p') ||
                             sourcesData.sources.find((s: any) => s.quality === '720p') ||
                             sourcesData.sources.find((s: any) => s.quality === 'default') ||
                             sourcesData.sources[0];
-        
-        const defaultReferer = sourcesData.headers?.Referer || 'https://hianime.to/';
+
+        const defaultReferer = sourcesData.headers?.Referer || 'https://gogoanime.run/';
         const streamUrl = bestSource.url;
         
+        // Construct the proxy URL for HLS playback to bypass CORS/Referer blocks
         const appUrl = req.nextUrl.origin;
         const proxyStreamUrl = `${appUrl}/api/stream?url=${encodeURIComponent(streamUrl)}&referer=${encodeURIComponent(defaultReferer)}`;
 
@@ -154,10 +108,10 @@ export async function GET(req: NextRequest) {
       }
     }
   } catch (err: any) {
-    console.warn(`[StreamExtractor] HiAnime extraction failed: ${err.message}`);
+    console.warn(`[StreamExtractor] Gogoanime extraction failed: ${err.message}`);
   }
 
-  // Attempt 3: Fetching AniList metadata and doing title-based search fallback
+  // Attempt 2: Fallback title-based search on Gogoanime
   try {
     console.log(`[StreamExtractor] Attempting fallback title-based search for AniList ID ${anilistId}`);
     
@@ -168,29 +122,26 @@ export async function GET(req: NextRequest) {
       const title = mappingData?.mappings?.title_romaji || mappingData?.mappings?.title_english;
       
       if (title) {
-        console.log(`[StreamExtractor] Found title: "${title}". Searching on AnimePahe...`);
-        const paheProvider = new ANIME.AnimePahe();
-        (paheProvider as any).baseUrl = 'https://animepahe.com';
+        const isDub = subOrDub === 'dub';
+        const searchQuery = isDub ? `${title} (Dub)` : title;
+        console.log(`[StreamExtractor] Found title: "${title}". Searching on Gogoanime with query: "${searchQuery}"...`);
+        const gogo = new ANIME.Gogoanime();
         
-        const searchResults = await paheProvider.search(title);
+        const searchResults = await gogo.search(searchQuery);
         if (searchResults.results && searchResults.results.length > 0) {
           const match = searchResults.results[0];
-          const info = await paheProvider.fetchAnimeInfo(match.id);
+          const info = await gogo.fetchAnimeInfo(match.id);
           const episode = info.episodes?.find((e: any) => e.number === epNum);
           
           if (episode) {
-            const sourcesData = await paheProvider.fetchEpisodeSources(episode.id);
+            const sourcesData = await gogo.fetchEpisodeSources(episode.id);
             if (sourcesData && sourcesData.sources && sourcesData.sources.length > 0) {
-              const isDubPreferred = subOrDub === 'dub';
-              const filteredSources = sourcesData.sources.filter((s: any) => !!s.isDub === isDubPreferred);
-              const activeSources = filteredSources.length > 0 ? filteredSources : sourcesData.sources;
-              
-              const bestSource = activeSources.find((s: any) => s.quality === '1080p') ||
-                                  activeSources.find((s: any) => s.quality === '720p') ||
-                                  activeSources.find((s: any) => s.quality === 'default') ||
-                                  activeSources[0];
+              const bestSource = sourcesData.sources.find((s: any) => s.quality === '1080p') ||
+                                  sourcesData.sources.find((s: any) => s.quality === '720p') ||
+                                  sourcesData.sources.find((s: any) => s.quality === 'default') ||
+                                  sourcesData.sources[0];
 
-              const defaultReferer = sourcesData.headers?.Referer || 'https://kwik.cx/';
+              const defaultReferer = sourcesData.headers?.Referer || 'https://gogoanime.run/';
               const streamUrl = bestSource.url;
               
               const appUrl = req.nextUrl.origin;
@@ -202,7 +153,7 @@ export async function GET(req: NextRequest) {
                 isM3U8: streamUrl.includes('.m3u8') || bestSource.isM3U8,
                 headers: { Referer: defaultReferer },
                 proxyUrl: proxyStreamUrl,
-                sources: activeSources,
+                sources: sourcesData.sources,
               } as StreamResponse);
             }
           }
@@ -215,7 +166,7 @@ export async function GET(req: NextRequest) {
 
   // If all attempts fail, return a 500 error
   return NextResponse.json(
-    { error: 'Failed to extract raw streaming link. All scraper providers returned errors.' },
+    { error: 'Failed to extract raw streaming link. Gogoanime provider returned errors.' },
     { status: 500 }
   );
 }

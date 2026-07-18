@@ -75,6 +75,7 @@ export async function GET(req: NextRequest) {
   try {
     console.log(`[StreamExtractor] Attempting Gogoanime for AniList ID ${anilistId}, Ep ${epNum}`);
     const gogo = new ANIME.Gogoanime();
+    (gogo as any).baseUrl = 'https://anitaku.pe';
     const anilist = new META.Anilist(gogo);
     
     const isDub = subOrDub === 'dub';
@@ -126,6 +127,7 @@ export async function GET(req: NextRequest) {
         const searchQuery = isDub ? `${title} (Dub)` : title;
         console.log(`[StreamExtractor] Found title: "${title}". Searching on Gogoanime with query: "${searchQuery}"...`);
         const gogo = new ANIME.Gogoanime();
+        (gogo as any).baseUrl = 'https://anitaku.pe';
         
         const searchResults = await gogo.search(searchQuery);
         if (searchResults.results && searchResults.results.length > 0) {

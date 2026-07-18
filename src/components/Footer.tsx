@@ -91,6 +91,7 @@ export default function Footer() {
               <span key={href} style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
                 <Link
                   href={href}
+                  prefetch={false}
                   style={{
                     fontSize: '0.875rem',
                     color: 'var(--text-secondary)',

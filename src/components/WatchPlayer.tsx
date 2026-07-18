@@ -45,7 +45,7 @@ export default function WatchPlayer({
   const hlsRef = useRef<Hls | null>(null);
   const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // 1. Fetch stream URL from our self-hosted Render API (HiAnime scraper)
+  // 1. Fetch stream URL from the Anify API (Client-side browser fetch)
   useEffect(() => {
     let active = true;
     setLoading(true);
@@ -63,37 +63,76 @@ export default function WatchPlayer({
       controller.abort(new Error('timeout'));
     }, 15000);
 
-    const category = isDub ? 'dub' : 'sub';
-    const apiBase = 'https://anime-api-a4my.onrender.com';
-    const url = `${apiBase}/api/stream?title=${encodeURIComponent(title)}&episode=${episode}&category=${category}`;
+    const subType = isDub ? 'dub' : 'sub';
 
+    async function fetchStream() {
+      try {
+        // Step A: Fetch episodes mapping
+        const episodesRes = await fetch(`https://api.anify.tv/episodes/${animeId}`, {
+          signal: controller.signal,
+        });
+        if (!episodesRes.ok) {
+          throw new Error(`Failed to fetch episodes list: ${episodesRes.status}`);
+        }
+        const providers = await episodesRes.json();
+        if (!Array.isArray(providers) || providers.length === 0) {
+          throw new Error('No episode providers found');
+        }
 
-    fetch(url, { signal: controller.signal })
-      .then((res) => {
-        clearTimeout(timeoutId);
-        if (!res.ok) throw new Error(`API returned status ${res.status}`);
-        return res.json();
-      })
-      .then((data) => {
+        // Prefer 'gogoanime' provider
+        const provider =
+          providers.find((p: any) => p.providerId === 'gogoanime') ||
+          providers[0];
+
+        const ep = provider.episodes.find((e: any) => e.number === Number(episode));
+        if (!ep) {
+          throw new Error(`Episode ${episode} not found on provider ${provider.providerId}`);
+        }
+
+        // Step B: Fetch sources
+        const sourcesUrl = `https://api.anify.tv/sources?providerId=${provider.providerId}&watchId=${encodeURIComponent(ep.id)}&episodeNumber=${episode}&id=${animeId}&subType=${subType}`;
+        const sourcesRes = await fetch(sourcesUrl, {
+          signal: controller.signal,
+        });
+        if (!sourcesRes.ok) {
+          throw new Error(`Failed to fetch stream sources: ${sourcesRes.status}`);
+        }
+        const sourcesData = await sourcesRes.json();
+        const sourcesList = sourcesData?.sources || [];
+        if (sourcesList.length === 0) {
+          throw new Error('No streaming sources returned');
+        }
+
+        // Extract best quality
+        const bestSource =
+          sourcesList.find((s: any) => s.quality === '1080p') ||
+          sourcesList.find((s: any) => s.quality === 'auto') ||
+          sourcesList.find((s: any) => s.quality === 'default') ||
+          sourcesList[0];
+
         if (!active) return;
-        if (data.url) {
-          setStreamUrl(data.url);
+        clearTimeout(timeoutId);
+
+        if (bestSource && bestSource.url) {
+          setStreamUrl(bestSource.url);
           setLoading(false);
         } else {
-          throw new Error(data.error || 'No stream URL returned');
+          throw new Error('No valid HLS stream found in API payload');
         }
-      })
-      .catch((err) => {
-        clearTimeout(timeoutId);
+      } catch (err: any) {
         if (!active) return;
+        clearTimeout(timeoutId);
         console.error('[WatchPlayer] Extraction failed:', err);
-        if (err.name === 'AbortError') {
-          setError('Extraction timed out after 15 seconds. The server may be waking up — please retry.');
+        if (err.name === 'AbortError' || err.message === 'timeout') {
+          setError('Extraction timed out after 15 seconds. Please retry.');
         } else {
           setError(`Extraction Failure: ${err.message}`);
         }
         setLoading(false);
-      });
+      }
+    }
+
+    fetchStream();
 
     return () => {
       active = false;
